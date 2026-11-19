@@ -1,0 +1,88 @@
+# Every push to main builds both apps and deploys both to Cloud Run (backend first). Docker layer caches make an
+# unchanged app rebuild in seconds. The backend migrates the database on start, so a failed migration fails the deploy.
+# CI/CD variables (Settings → CI/CD → Variables):
+#   GCP_SERVICE_KEY       File, masked: yp-deployer service-account key
+#   MICROSOFT_CLIENT_ID   Entra app (client) ID
+#   MICROSOFT_TENANT_ID   Entra tenant ID, or "common" once the app accepts any organization and personal accounts
+#   GOOGLE_CLIENT_ID      Google OAuth client ID
+# Runtime secrets live in Secret Manager: yp-database-url, yp-jwt-secret, yp-pseudonym-key, yp-ms-client-secret, yp-connection-key,
+# yp-google-client-secret.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web"
+
+stages: [build, deploy]
+
+variables:
+  GCP_PROJECT_ID: yieldpilot-csulb
+  GCP_REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev/yieldpilot-csulb/yieldpilot
+  BACKEND_IMAGE: $REGISTRY/backend
+  FRONTEND_IMAGE: $REGISTRY/frontend
+  SQL_INSTANCE: yieldpilot-csulb:us-central1:yieldpilot-db
+  FRONTEND_ORIGIN: https://yp-frontend-920963501268.us-central1.run.app
+  RUNTIME_ENV: ENV=prod,GCS_BUCKET=yieldpilot-csulb-data,GCP_PROJECT=yieldpilot-csulb,AUTH_MODE=microsoft,ALLOWED_DOMAINS=*,OPERATOR_EMAILS=mahmoud.albawaneh@csulb.edu;ojasprashant.suratkar-sa@csulb.edu,MICROSOFT_PERSONAL_ACCOUNTS=true
+  RUNTIME_SECRETS: DATABASE_URL=yp-database-url:latest,PSEUDONYM_KEY=yp-pseudonym-key:latest,JWT_SECRET=yp-jwt-secret:latest,MICROSOFT_CLIENT_SECRET=yp-ms-client-secret:latest,CONNECTION_KEY=yp-connection-key:latest,GOOGLE_CLIENT_SECRET=yp-google-client-secret:latest
+
+.on_main: &on_main
+  if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.gcloud:
+  stage: deploy
+  rules: [*on_main]
+  before_script:
+    - gcloud auth activate-service-account --key-file="$GCP_SERVICE_KEY" --quiet
+    - gcloud config set project "$GCP_PROJECT_ID" --quiet
+
+# Images build on every branch (that is the check); main also pushes them.
+.build:
+  stage: build
+  before_script:
+    - test -z "$GCP_SERVICE_KEY" || cat "$GCP_SERVICE_KEY" | docker login -u _json_key --password-stdin "https://$GCP_REGION-docker.pkg.dev"
+
+build_backend:
+  extends: .build
+  script:
+    - docker build --platform linux/amd64 -t "$BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA" backend
+    # inside the image just built: every module imports and every migration applies to an empty Postgres (thrown away after)
+    - NET=ci-$CI_JOB_ID; docker network create "$NET" >/dev/null
+    - docker run -d --rm --name "$NET-pg" --network "$NET" -e POSTGRES_PASSWORD=ci postgres:16-alpine >/dev/null
+    - for i in $(seq 1 30); do docker exec "$NET-pg" pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
+    - docker run --rm --network "$NET" -e DATABASE_URL="postgresql+asyncpg://postgres:ci@$NET-pg:5432/postgres" -e GCS_BUCKET=ci-check "$BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA" sh -c "python -c 'import app.main' && alembic upgrade head" && R=0 || R=1; docker rm -f "$NET-pg" >/dev/null; docker network rm "$NET" >/dev/null; test $R -eq 0
+    - if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then docker push -q "$BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA"; fi
+
+build_frontend:
+  extends: .build
+  script:
+    # next build type-checks the app, so this is the frontend check too
+    - docker build --platform linux/amd64 --build-arg NEXT_PUBLIC_AUTH_MODE=microsoft -t "$FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA" frontend
+    - if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then docker push -q "$FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA"; fi
+
+deploy_backend:
+  extends: .gcloud
+  needs: [build_backend]
+  script:
+    - >
+      gcloud run deploy yp-backend --region "$GCP_REGION" --quiet
+      --image "$BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA"
+      --service-account "yp-backend@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+      --add-cloudsql-instances "$SQL_INSTANCE"
+      --set-env-vars "$RUNTIME_ENV,ENGINE_THREADS=8,FRONTEND_ORIGIN=$FRONTEND_ORIGIN,MICROSOFT_CLIENT_ID=$MICROSOFT_CLIENT_ID,GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}"
+      --set-secrets "$RUNTIME_SECRETS"
+      --cpu 8 --memory 8Gi --concurrency 8 --min-instances 1 --max-instances 10 --cpu-boost --timeout 900
+      --execution-environment gen2 --cpu-throttling
+      --no-allow-unauthenticated
+
+deploy_frontend:
+  extends: .gcloud
+  needs: [build_frontend, deploy_backend]
+  script:
+    - BACKEND_URL=$(gcloud run services describe yp-backend --region "$GCP_REGION" --format 'value(status.url)')
+    - test -n "$BACKEND_URL"
+    - >
+      gcloud run deploy yp-frontend --region "$GCP_REGION" --quiet
+      --image "$FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA"
+      --service-account "yp-frontend@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+      --set-env-vars "BACKEND_URL=$BACKEND_URL"
+      --cpu 1 --memory 1Gi --min-instances 1 --max-instances 10 --cpu-boost --timeout 900

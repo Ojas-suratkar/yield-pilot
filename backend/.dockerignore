@@ -1,0 +1,7 @@
+.venv
+.env*
+!.env.example
+.storage
+*.db
+__pycache__
+Dockerfile

@@ -1,0 +1,14 @@
+.DS_Store
+.archive/
+node_modules/
+.next/
+.venv/
+__pycache__/
+*.pyc
+.storage/
+*.db
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.claude/

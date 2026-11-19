@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* YieldPilot: violet on soft neutral, Geist type, soft elevated surfaces. */
+@layer base {
+  :root {
+    --font-sans: "Geist";
+    --font-display: "Geist";
+    --radius-card: 12px;
+    --radius-btn: 10px;
+    --radius-input: 10px;
+
+    --background: 245 25% 97.5%;
+    --foreground: 222 20% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 20%;
+    /* soft and low-glare: charcoal text, light greys, a muted purple used only for the main action and the current selection */
+    --primary: 250 45% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 95%;
+    --secondary-foreground: 222 18% 26%;
+    --muted: 220 16% 95.5%;
+    --muted-foreground: 220 9% 45%;
+    --border: 220 14% 90%;
+    --input: 220 13% 84%;
+    --ring: 250 45% 55%;
+    --destructive: 2 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --good: 152 45% 34%;
+    --warn: 34 80% 42%;
+    --highlight: 250 36% 46%;
+    --highlight-foreground: 0 0% 100%;
+
+    /* one companion colour per part of the workflow, all tuned to sit beside the purple */
+    --c-home: 250 45% 56%;
+    --c-data: 199 80% 44%;
+    --c-audit: 173 64% 34%;
+    --c-setup: 262 55% 56%;
+    --c-features: 32 88% 46%;
+    --c-train: 228 62% 56%;
+    --c-results: 152 52% 36%;
+    --c-scenarios: 340 68% 52%;
+    --c-reports: 286 45% 50%;
+
+    --sidebar: 250 30% 98.5%;
+    --sidebar-foreground: 222 18% 26%;
+    --sidebar-muted: 220 9% 48%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-border: 220 14% 90%;
+
+    --step-1: hsl(250 45% 55%);
+    --step-2: hsl(250 45% 55%);
+    --step-3: hsl(250 45% 55%);
+    --step-4: hsl(250 45% 55%);
+    --step-5: hsl(250 45% 55%);
+    --step-6: hsl(250 45% 55%);
+    --step-7: hsl(250 45% 55%);
+
+    /* charts: purple = this forecast, slate = past terms (context) */
+    --series-ours: #6c5bd0;
+    --series-actual: #8e98aa;
+    --series-ref: #6c5bd0;
+    --series-teal: #14958a;
+    --series-sky: #1b8fc7;
+    /* categories, always in this order */
+    --cat-1: #2a78d6;
+    --cat-2: #eb6834;
+    --cat-3: #1baf7a;
+    --cat-4: #eda100;
+    --shadow-card: 0 1px 2px hsl(224 25% 20% / 0.05), 0 1px 3px hsl(224 25% 20% / 0.04);
+    --shadow-lift: 0 2px 4px hsl(224 25% 20% / 0.06), 0 10px 24px -10px hsl(224 30% 20% / 0.18);
+  }
+
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 214 32% 93%;
+    --card: 222 40% 10%;
+    --card-foreground: 214 32% 93%;
+    --popover: 222 40% 11%;
+    --popover-foreground: 214 32% 93%;
+    --primary: 217 91% 64%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 222 45% 16%;
+    --secondary-foreground: 214 95% 85%;
+    --muted: 222 30% 15%;
+    --muted-foreground: 215 20% 68%;
+    --border: 222 28% 19%;
+    --input: 222 24% 26%;
+    --ring: 217 91% 64%;
+    --good: 142 60% 50%;
+    --warn: 38 92% 58%;
+    --highlight: 262 83% 70%;
+
+    --sidebar: 222 42% 9%;
+    --sidebar-foreground: 214 32% 93%;
+    --sidebar-muted: 215 20% 65%;
+    --sidebar-accent: 222 45% 16%;
+    --sidebar-border: 222 28% 17%;
+
+    --series-ours: #9a86f0;
+    --series-actual: #7c8698;
+    --series-ref: #9a86f0;
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background font-sans text-[14px] text-foreground antialiased;
+    letter-spacing: -0.003em;
+    font-feature-settings:
+      "tnum" 1,
+      "cv11" 1;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-[-0.025em];
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* the one card surface used everywhere */
+  .surface {
+    @apply rounded-xl border border-border bg-card;
+    box-shadow: var(--shadow-card);
+  }
+  /* a card you can click */
+  .surface-btn {
+    @apply surface text-left transition-[box-shadow,border-color] duration-150 ease-out hover:border-foreground/20;
+  }
+  .surface-btn:hover {
+    box-shadow: var(--shadow-lift);
+  }
+  /* chosen: shows at once and stays shown while the pointer is still over it (hover never hides it) */
+  .surface-on,
+  .surface-on:hover {
+    border-color: hsl(var(--primary));
+    background-color: hsl(var(--primary) / 0.05);
+    box-shadow:
+      0 0 0 1.5px hsl(var(--primary)),
+      0 6px 18px -8px hsl(var(--primary) / 0.45);
+  }
+}
+
+@layer utilities {
+  .page-enter {
+    animation: page-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  /* a light sheen moving across a progress bar's filled part while the work continues */
+  .yp-live {
+    background-image: linear-gradient(110deg, transparent 35%, hsl(0 0% 100% / 0.35) 50%, transparent 65%);
+    background-size: 200% 100%;
+    animation: yp-sheen 1.4s linear infinite;
+  }
+  @keyframes yp-sheen {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .yp-live { animation: none; }
+  }
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .scrollbars-visible {
+    scrollbar-width: thin;
+  }
+  .scrollbars-visible::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .scrollbars-visible::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  .scrollbars-visible::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.4);
+    border-radius: 999px;
+    border: 3px solid hsl(var(--muted));
+  }
+  .scrollbars-visible::-webkit-scrollbar-corner {
+    background: hsl(var(--muted));
+  }
+  .bg-dots {
+    background-image: radial-gradient(hsl(var(--primary) / 0.12) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+}
